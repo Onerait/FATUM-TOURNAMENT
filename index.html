@@ -1,3 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Fortune Tournament — Wheel</title>
+<style>
+  :root {
+    --bg: #0a0a0a; --panel: #141414; --border: #2a2a2a; --text: #e8e8e8;
+    --muted: #888; --accent: #ff5722; --accent-soft: rgba(255, 87, 34, 0.15);
+    --guest: #ffd700; --jackpot: #ff5722; --slot-bg: #1a1a1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', 'Segoe UI', sans-serif; min-height: 100vh; padding: 30px; overflow-x: hidden; }
+  
+  /* Скрываем элементы управления в режиме стримера */
+  body.streamer-mode header, body.streamer-mode .controls, body.streamer-mode .btn-row { display: none !important; }
+  body.streamer-mode .result { margin-top: 50px; }
+  body.streamer-mode .result h2 { font-size: 64px; }
+
+  header { display: flex; justify-content: center; gap: 10px; margin-bottom: 40px; position: relative; flex-wrap: wrap; }
+  .mode-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 10px 24px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.3s; }
+  .mode-btn:hover { color: var(--text); border-color: var(--text); }
+  .mode-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .screen { display: none; } .screen.active { display: block; }
+  .teams-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; position: relative; }
+  .groups-column { display: flex; flex-direction: column; gap: 15px; }
+  .group-slot { background: var(--slot-bg); border: 2px dashed var(--border); border-radius: 8px; padding: 15px; min-height: 120px; transition: all 0.3s; }
+  .group-slot.drag-over { border-color: var(--accent); background: var(--slot-hover); }
+  .group-slot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .group-slot-title { font-size: 18px; font-weight: 900; letter-spacing: 3px; color: var(--accent); }
+  .group-slot-count { font-size: 12px; color: var(--muted); }
+  .group-teams { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
+  .team-row { display: flex; align-items: center; gap: 8px; }
+  .pool-column { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .pool-title { font-size: 14px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 15px; text-align: center; }
+  .pool-teams { display: flex; flex-direction: column; gap: 10px; min-height: 100px; padding: 10px; background: var(--slot-bg); border-radius: 6px; }
+  .team-chip { background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 4px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; cursor: grab; user-select: none; transition: all 0.2s; color: var(--text); flex: 1; }
+  .team-chip:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .team-chip:active { cursor: grabbing; } .team-chip.dragging { opacity: 0.4; }
+  .edit-btn { background: var(--slot-bg); border: 1px solid var(--border); color: var(--accent); cursor: pointer; padding: 6px 10px; border-radius: 4px; font-size: 12px; transition: all 0.2s; }
+  .edit-btn:hover { background: var(--accent); color: var(--bg); }
+  .wheel-container { position: relative; width: 500px; height: 500px; margin: 0 auto 30px; }
+  .wheel { width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--border); position: relative; overflow: hidden; background: #1e1e1e; }
+  .wheel.spinning { transition: transform 6s cubic-bezier(0.1, 0.9, 0.2, 1.0); }
+  .wheel-divider { position: absolute; top: 50%; left: 50%; width: 50%; height: 2px; background: var(--border); transform-origin: 0 0; pointer-events: none; }
+  .wheel-sector-label { position: absolute; top: 50%; left: 50%; transform-origin: 0 0; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text); white-space: nowrap; pointer-events: none; transition: all 0.3s; }
+  .pointer { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 25px solid var(--accent); z-index: 10; filter: drop-shadow(0 0 8px var(--accent)); }
+  .wheel-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70px; height: 70px; background: var(--bg); border: 2px solid var(--accent); border-radius: 50%; z-index: 5; }
+  .btn { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 14px 40px; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; cursor: pointer; transition: all 0.3s; font-weight: 600; }
+  .btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-row { text-align: center; margin: 20px 0; }
+  .result { max-width: 700px; margin: 30px auto; padding: 40px; border: 2px solid var(--accent); background: var(--panel); text-align: center; display: none; position: relative; overflow: hidden; }
+  .result.show { display: block; animation: flyIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes flyIn { 0% { opacity: 0; transform: scale(0.3) translateY(-100px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+  .result h2 { font-size: 36px; letter-spacing: 6px; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; position: relative; z-index: 1; text-shadow: 0 0 20px var(--accent); }
+  .result p { color: var(--muted); font-size: 16px; line-height: 1.6; position: relative; z-index: 1; }
+  .loadouts-header { display: flex; justify-content: center; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; }
+  .empty-state { text-align: center; padding: 60px 20px; border: 2px dashed var(--border); color: var(--muted); margin-top: 30px; }
+  .empty-state p { margin-bottom: 20px; font-size: 16px; }
+  .groups-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 25px; margin-top: 30px; }
+  .group-result-card { background: var(--panel); border: 2px solid var(--accent); padding: 20px; position: relative; border-radius: 8px; }
+  .group-result-card h3 { font-size: 18px; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .team-in-group { background: var(--slot-bg); border: 1px solid var(--border); padding: 15px; margin-bottom: 15px; border-radius: 4px; }
+  .team-in-group-name { font-size: 14px; font-weight: 700; letter-spacing: 2px; color: var(--accent); margin-bottom: 10px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+  .player-row { font-size: 13px; margin-bottom: 6px; color: var(--text); font-family: 'Courier New', monospace; line-height: 1.4; }
+  .player-row span.label { color: var(--accent); font-weight: bold; }
+  .copy-all-btn { grid-column: 1 / -1; background: var(--accent); color: var(--bg); border: none; padding: 15px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; margin-top: 10px; transition: all 0.3s; font-weight: 700; border-radius: 4px; }
+  .copy-all-btn:hover { background: #ff784e; transform: translateY(-2px); }
+  .copy-all-btn.copied { background: #4caf50; color: white; }
+  .slot-overlay, .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+  .slot-overlay.active, .modal.active { display: flex; }
+  .modal-content { background: var(--panel); border: 2px solid var(--accent); padding: 30px; border-radius: 8px; width: 90%; max-width: 400px; }
+  .modal-content h3 { color: var(--accent); margin-bottom: 20px; text-align: center; letter-spacing: 2px; }
+  .modal-content input { width: 100%; padding: 12px; margin-bottom: 15px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 14px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 10px; }
+  .modal-actions button { flex: 1; padding: 12px; cursor: pointer; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 12px; }
+  .slot-title { font-size: 48px; font-weight: 900; letter-spacing: 8px; color: var(--jackpot); text-transform: uppercase; margin-bottom: 40px; text-shadow: 0 0 20px var(--jackpot); animation: jackpotPulse 2.5s ease-in-out infinite; }
+  @keyframes jackpotPulse { 0%, 100% { text-shadow: 0 0 20px var(--jackpot); transform: scale(1); } 50% { text-shadow: 0 0 30px var(--jackpot); transform: scale(1.02); } }
+  .slot-machine { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; background: var(--panel); padding: 25px; border: 3px solid var(--jackpot); border-radius: 12px; box-shadow: 0 0 50px rgba(255, 87, 34, 0.25); margin-bottom: 40px; width: 95%; max-width: 1000px; }
+  .reel-container { height: 80px; overflow: hidden; background: #000; border: 1px solid var(--border); border-radius: 6px; position: relative; display: flex; align-items: center; justify-content: center; }
+  .reel-text { font-size: 12px; font-weight: 700; color: var(--text); text-transform: uppercase; text-align: center; padding: 0 5px; transition: all 0.3s ease; line-height: 1.2; }
+  .reel-text.final { color: var(--jackpot) !important; font-size: 13px; font-weight: 900; text-shadow: 0 0 15px var(--jackpot); transform: scale(1.1); }
+  .slot-result { display: none; text-align: center; animation: flyIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .slot-result.show { display: block; }
+  .meta-loadout-card { background: var(--panel); border: 2px solid var(--jackpot); padding: 30px; min-width: 400px; position: relative; box-shadow: 0 0 40px rgba(255, 87, 34, 0.2); }
+  .meta-loadout-card h3 { color: var(--jackpot) !important; font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--jackpot); padding-bottom: 15px; }
+  .spin-btn { background: var(--jackpot); color: #000; border: none; padding: 18px 60px; font-size: 20px; font-weight: 900; letter-spacing: 4px; text-transform: uppercase; cursor: pointer; border-radius: 6px; transition: all 0.3s; box-shadow: 0 0 25px var(--jackpot); }
+  .spin-btn:hover { transform: scale(1.05); box-shadow: 0 0 50px var(--jackpot); }
+  .player-mark { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+  .player-mark input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+  .player-mark label { font-size: 11px; color: var(--muted); cursor: pointer; }
+  .teams-mode-toggle { position: absolute; bottom: 20px; right: 20px; display: flex; align-items: center; gap: 10px; background: var(--panel); padding: 12px 18px; border: 1px solid var(--border); border-radius: 8px; z-index: 10; }
+  .teams-mode-toggle input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
+  .teams-mode-toggle label { font-size: 14px; font-weight: 700; color: var(--text); cursor: pointer; letter-spacing: 1px; text-transform: uppercase; }
+  .team-chip-input { background: var(--bg); border: 1px solid var(--accent); color: var(--text); padding: 6px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; width: 100%; outline: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="mode-btn active" data-mode="main">Основная сетка</button>
+  <button class="mode-btn" data-mode="semifinal">Полуфинал</button>
+  <button class="mode-btn" data-screen="teamManagementScreen">Команды</button>
+  <button class="mode-btn" data-screen="loadoutsScreen">Лодауты</button>
+</header>
+
+<div class="screen active" id="wheelScreen">
+  <div class="wheel-container">
+    <div class="pointer"></div>
+    <div class="wheel" id="wheel"></div>
+    <div class="wheel-center"></div>
+  </div>
+  <div class="controls">
+    <div class="btn-row"><button class="btn" id="spinBtn">Крутить</button></div>
+    <div class="result" id="result">
+      <h2 id="resultName">Ожидание...</h2>
+      <p id="resultDesc"></p>
+    </div>
+    <div class="btn-row"><button class="btn" id="toLoadoutsBtn">К лодаутам →</button></div>
+  </div>
+</div>
+
+<div class="screen" id="teamManagementScreen">
+  <div class="loadouts-header"><h3>Распределение команд по группам</h3></div>
+  <p style="color: var(--muted); font-size: 14px; margin-bottom: 20px; text-align: center;">Перетащите команды в группы. Кликните на никнейм для быстрого редактирования. Нажмите ✎ для полного редактирования.</p>
+  <div class="teams-layout">
+    <div class="groups-column" id="groupsColumn"></div>
+    <div class="pool-column">
+      <div class="pool-title">Доступные команды</div>
+      <div class="pool-teams" id="poolTeams"></div>
+    </div>
+    <div class="teams-mode-toggle">
+      <input type="checkbox" id="mode8Teams">
+      <label for="mode8Teams">8 команд</label>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="loadoutsScreen">
+  <div class="loadouts-header"><button class="btn" id="generateBtn">Сгенерировать лодауты</button></div>
+  <div id="emptyState" class="empty-state">
+    <p>Лодауты еще не сгенерированы.</p>
+    <button class="btn" id="generateBtnEmpty">Сгенерировать</button>
+  </div>
+  <div class="groups-results" id="groupsResults" style="display: none;"></div>
+</div>
+
+<div class="modal" id="rosterModal">
+  <div class="modal-content">
+    <h3>Состав: <span id="modalTeamName"></span></h3>
+    <div style="margin-bottom: 15px;"><input type="text" id="p1" placeholder="Никнейм игрока 1"><div class="player-mark"><input type="checkbox" id="mark1"><label for="mark1">Отметить для замены</label></div></div>
+    <div style="margin-bottom: 15px;"><input type="text" id="p2" placeholder="Никнейм игрока 2"><div class="player-mark"><input type="checkbox" id="mark2"><label for="mark2">Отметить для замены</label></div></div>
+    <div style="margin-bottom: 15px;"><input type="text" id="p3" placeholder="Никнейм игрока 3"><div class="player-mark"><input type="checkbox" id="mark3"><label for="mark3">Отметить для замены</label></div></div>
+    <div class="modal-actions">
+      <button class="btn" id="saveRoster" style="padding: 10px;">Сохранить</button>
+      <button class="btn" id="closeRoster" style="padding: 10px; border-color: var(--muted); color: var(--muted);">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<div class="slot-overlay" id="metaSlotScreen">
+  <div class="slot-title" id="slotTitle">ГЕНЕРАЦИЯ МЕТА БИЛДА</div>
+  <div class="slot-machine" id="slotMachine">
+    <div class="reel-container"><div class="reel-text" id="reelClass">???</div></div>
+    <div class="reel-container"><div class="reel-text" id="reelAbility">???</div></div>
+    <div class="reel-container"><div class="reel-text" id="reelWeapon">???</div></div>
+    <div class="reel-container"><div class="reel-text" id="reelG1">???</div></div>
+    <div class="reel-container"><div class="reel-text" id="reelG2">???</div></div>
+    <div class="reel-container"><div class="reel-text" id="reelG3">???</div></div>
+  </div>
+  <button class="spin-btn" id="spinSlotBtn">КРУТИТЬ</button>
+  <div class="slot-result" id="slotResult">
+    <div class="meta-loadout-card">
+      <h3>⭐ ОБЩИЙ ЛОДАУТ ДЛЯ ВСЕХ ⭐</h3>
+      <div class="player-row" id="metaResultText"></div>
+      <button class="btn" id="copyMetaBtn" style="margin-top: 20px; padding: 10px 20px; font-size: 12px;">Копировать</button>
+    </div>
+    <button class="btn" id="closeSlotBtn" style="margin-top: 30px;">Закрыть</button>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<script>
+// ===== FIREBASE КОНФИГ (ЗАМЕНИ НА СВОЙ!) =====
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
@@ -20,3 +208,311 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const resultRef = db.ref('wheel/result');
+
+// Определяем режим: стример или организатор
+const isStreamer = window.location.search.includes('streamer=1');
+if (isStreamer) document.body.classList.add('streamer-mode');
+
+// Логика для стримеров (только слушают результат)
+if (isStreamer) {
+  resultRef.on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      document.getElementById('resultName').textContent = data.name;
+      document.getElementById('resultDesc').textContent = data.description || '';
+      document.getElementById('result').style.display = 'block';
+      setTimeout(() => document.getElementById('result').classList.add('show'), 10);
+    }
+  });
+}
+
+// Функция отправки результата (для организатора)
+function sendResultToFirebase(name, description) {
+  if (!isStreamer) {
+    resultRef.set({ name: name, description: description, timestamp: Date.now() });
+  }
+}
+
+// ==========================================================
+// НАСТРОЙКИ ПОРЯДКА МОДИФИКАТОРОВ
+// ==========================================================
+const MAIN_SEQUENCE = ["Мета Билд", "Разведчик", "Перемешка", "Рукопашка", "ТДМ"];
+const SEMI_SEQUENCE = ["Стенка на стенку", "Модный приговор", "Cursed dailies", "Битва умов"];
+
+const teamPlayers = {
+  "STG": ["Player1", "Player2", "Player3"], "67": ["Player1", "Player2", "Player3"],
+  "Жабки": ["Player1", "Player2", "Player3"], "BANANA Team": ["Player1", "Player2", "Player3"],
+  "калопка.клан": ["Player1", "Player2", "Player3"], "Pedestrian mafia": ["Player1", "Player2", "Player3"],
+  "SKOVORODKA": ["Player1", "Player2", "Player3"], "Три Финалиста": ["Player1", "Player2", "Player3"],
+  "DOLGI": ["Player1", "Player2", "Player3"], "FatBalls": ["Player1", "Player2", "Player3"],
+  "Жертвы меты": ["Player1", "Player2", "Player3"], "bbycakes": ["Player1", "Player2", "Player3"],
+  "OCEAN": ["Player1", "Player2", "Player3"], "Default Knights": ["Player1", "Player2", "Player3"],
+  "Чимпинкинки": ["Player1", "Player2", "Player3"], "TO4KA": ["Player1", "Player2", "Player3"]
+};
+
+const DATA = {
+  teamNames: Object.keys(teamPlayers),
+  semifinal: { modifiers: [
+    { name: "Стенка на стенку", description: "Каждой команде выдается случайный лодаут без особых условий." },
+    { name: "Cursed dailies", description: "В этом раунде вместо того, чтобы бороться за деньги, вы должны выполнять задания, выводимые в чат." },
+    { name: "Модный приговор", description: "...?" },
+    { name: "Битва умов", description: "Мини-раунд викторины вне The Finals. От каждой команды по одному участнику." }
+  ]},
+  main: { modifiers: [
+    { name: "Перемешка", description: "В этом раунде случайный игрок из каждой команды попадает в чужую команду." },
+    { name: "Рукопашка", description: "В этом раунде вам ЗАПРЕЩЕНО использовать оружие. У всех будут фиксированные оружия: Xp-54, Akm, M60." },
+    { name: "ТДМ", description: "В этом раунде запрещено вставлять коробки в кешаут. Деньги только за ликвидации и волты." },
+    { name: "Разведчик", description: "Один конкретный игрок каждой команды (отмеченный галочкой) переносится в наблюдатели." },
+    { name: "Мета Билд", description: "У всех игроков один лодаут, который выпадет вам" }
+  ]},
+  loadouts: {
+    light: { className: "Light", abilities: ["True Sight", "Grappling Hook", "Evasive Dash", "Cloaking Device"], weapons: ["93R", "ARN-220", "DAGGER", "LH1", "M11", "M26 MATTER", "RECURVE BOW", "SH1900", "SR-84", "SWORD", "THROWING KNIVES", "V9S", "XP-54"], gadgets: ["Breach Charge", "Gateway", "Glitch Grenade", "Gravity Vortex", "H+ Infuser", "Mimic Device", "Nullifier", "Thermal Bore", "Tracking Dart", "Translocator", "Vanishing Bomb", "Sonar Grenade", "Flashbang", "Frag Grenade", "Gas Grenade", "Goo Grenade", "Pyro Grenade", "Smoke Grenade"] },
+    medium: { className: "Medium", abilities: ["Dematerializer", "Guardian Turret", "Healing Beam", "Shockwave"], weapons: ["AKM", "CB-01 REPEATER", "CERBERUS 12GA", "CHIMERA-XB", "CL-40", "DUAL BLADES", "FAMAS", "FCAR", "MODEL 1887", "P90", "PIKE-556", "R-357", "RIOT SHIELD"], gadgets: ["APS Turret", "Breach Drill", "Data Reshaper", "Defibrillator", "Gas Mine", "Glitch Trap", "Hover Pad", "Jump Pad", "Zipline", "Flashbang", "Frag Grenade", "Gas Grenade", "Goo Grenade", "Pyro Grenade", "Smoke Grenade", "Proximity Sensor", "Explosive Mine", "Sonar Grenade"] },
+    heavy: { className: "Heavy", abilities: ["Charge 'N' Slam", "Goo Gun", "Mesh Shield", "Winch Claw"], weapons: [".50 Akimbo", "BFR Titan", "Flamethrower", "KS-23", "Lewis Gun", "MT36 Minigun", "M60", "MGL32", "SA1216", "Shak-50", "Sledgehammer", "Spear"], gadgets: ["Anti-Gravity Cube", "Barricade", "C4", "Dome Shield", "Healing Emitter", "Lockbolt", "Pyro Mine", "RPG-7", "Flashbang", "Frag Grenade", "Gas Grenade", "Goo Grenade", "Pyro Grenade", "Smoke Grenade", "Proximity Sensor", "Explosive Mine"] }
+  }
+};
+
+let teamGroups = { "А": DATA.teamNames.slice(0, 4), "Б": DATA.teamNames.slice(4, 8), "В": DATA.teamNames.slice(8, 12), "Г": DATA.teamNames.slice(12, 16) };
+let teamRosters = {}, teamMarks = {};
+DATA.teamNames.forEach(name => { teamRosters[name] = teamPlayers[name] || ["Никнейм 1", "Никнейм 2", "Никнейм 3"]; teamMarks[name] = [false, false, false]; });
+
+let currentMode = "main", currentModifier = null, isSpinning = false, wheelRotation = 0;
+let removedModifiers = { main: new Set(), semifinal: new Set() }, lastMetaLoadout = null, currentEditingTeam = null;
+
+const wheelEl = document.getElementById("wheel"), spinBtn = document.getElementById("spinBtn"), resultEl = document.getElementById("result");
+const resultName = document.getElementById("resultName"), resultDesc = document.getElementById("resultDesc");
+const toLoadoutsBtn = document.getElementById("toLoadoutsBtn"), poolTeamsEl = document.getElementById("poolTeams");
+const mode8TeamsCheckbox = document.getElementById("mode8Teams");
+
+function showScreen(screenId) { document.querySelectorAll(".screen").forEach(s => s.classList.remove("active")); document.getElementById(screenId).classList.add("active"); }
+
+document.querySelectorAll(".mode-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (isStreamer) return; // Стримеры не могут переключать вкладки
+    document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    if (btn.dataset.mode) { currentMode = btn.dataset.mode; renderWheel(); showScreen("wheelScreen"); spinBtn.textContent = "Крутить"; spinBtn.disabled = false; } 
+    else if (btn.dataset.screen) { showScreen(btn.dataset.screen); if (btn.dataset.screen === "teamManagementScreen") renderTeamManagement(); }
+  });
+});
+
+mode8TeamsCheckbox.addEventListener("change", () => {
+  if (currentMode === "main") { removedModifiers.main.clear(); currentModifier = null; renderWheel(); spinBtn.textContent = "Крутить"; spinBtn.disabled = false; resultEl.classList.remove("show"); resultEl.style.display = "none"; }
+});
+
+function getAvailableModifiers() {
+  let sequence = currentMode === "main" ? MAIN_SEQUENCE : SEMI_SEQUENCE;
+  let allMods = currentMode === "main" ? DATA.main.modifiers : DATA.semifinal.modifiers;
+  const is8TeamMode = mode8TeamsCheckbox.checked; let mods = [];
+  for (let modName of sequence) {
+    let mod = allMods.find(m => m.name === modName);
+    if (mod) {
+      if (currentMode === "main" && is8TeamMode && (mod.name === "ТДМ" || mod.name === "Рукопашка")) continue;
+      if (!removedModifiers[currentMode].has(mod.name)) mods.push(mod);
+    }
+  }
+  return mods;
+}
+
+function renderWheel() {
+  const mods = getAvailableModifiers();
+  if (mods.length === 0) {
+    wheelEl.innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);"><p style="margin-bottom:15px;">Все модификаторы использованы</p><button class="btn" id="resetBtn" style="margin-top:10px;">Сбросить порядок</button></div>';
+    document.getElementById("resetBtn").addEventListener("click", () => { removedModifiers[currentMode].clear(); currentModifier = null; renderWheel(); spinBtn.textContent = "Крутить"; spinBtn.disabled = false; });
+    spinBtn.disabled = true; spinBtn.textContent = "Все использованы"; return;
+  }
+  spinBtn.disabled = false;
+  const n = mods.length, angleStep = 360 / n;
+  wheelEl.style.background = "#1e1e1e"; wheelEl.innerHTML = "";
+  for (let i = 0; i < n; i++) { const divider = document.createElement("div"); divider.className = "wheel-divider"; divider.style.transform = `rotate(${i * angleStep - 90}deg)`; wheelEl.appendChild(divider); }
+  const radius = currentMode === "semifinal" ? 130 : 160;
+  mods.forEach((m, i) => {
+    const label = document.createElement("div"); label.className = "wheel-sector-label";
+    const angle = i * angleStep + angleStep / 2 - 90, angleRad = angle * Math.PI / 180;
+    label.style.transform = `translate(${Math.cos(angleRad) * radius}px, ${Math.sin(angleRad) * radius}px) rotate(${angle}deg) translateX(-50%)`;
+    label.textContent = m.name; label.style.color = "var(--text)"; label.style.fontSize = currentMode === "semifinal" ? "11px" : "13px";
+    wheelEl.appendChild(label);
+  });
+  wheelEl.classList.remove("spinning"); wheelEl.style.transform = `rotate(0deg)`; wheelRotation = 0;
+}
+
+spinBtn.addEventListener("click", () => {
+  if (isSpinning) return;
+  const mods = getAvailableModifiers(); if (mods.length === 0) return;
+  if (currentModifier) removedModifiers[currentMode].add(currentModifier.name);
+  renderWheel(); 
+  const availableMods = getAvailableModifiers();
+  if (availableMods.length === 0) { spinBtn.disabled = true; spinBtn.textContent = "Все использованы"; return; }
+  const nextMod = availableMods[0]; 
+  isSpinning = true; spinBtn.disabled = true;
+  resultEl.classList.remove("show"); resultEl.style.display = "none";
+  const n = availableMods.length, angleStep = 360 / n;
+  const winIndex = availableMods.findIndex(m => m.name === nextMod.name), targetAngle = winIndex * angleStep + angleStep / 2;
+  const extraSpins = 10 + Math.floor(Math.random() * 5), offset = (Math.random() - 0.5) * angleStep * 0.3; 
+  const finalRotation = wheelRotation + extraSpins * 360 + (360 - targetAngle) + offset;
+  wheelEl.classList.add("spinning"); wheelEl.style.transform = `rotate(${finalRotation}deg)`; wheelRotation = finalRotation;
+  
+  setTimeout(() => {
+    currentModifier = nextMod;
+    resultName.textContent = currentModifier.name;
+    resultDesc.textContent = currentModifier.description || "";
+    resultDesc.style.display = currentModifier.description ? "block" : "none";
+    resultEl.style.display = "block";
+    setTimeout(() => resultEl.classList.add("show"), 10);
+    
+    // ОТПРАВКА РЕЗУЛЬТАТА В FIREBASE
+    sendResultToFirebase(currentModifier.name, currentModifier.description);
+    
+    const labels = wheelEl.querySelectorAll('.wheel-sector-label');
+    for(let lbl of labels) { if(lbl.textContent === currentModifier.name) { lbl.style.color = "var(--accent)"; lbl.style.textShadow = "0 0 12px var(--accent)"; } }
+    isSpinning = false; spinBtn.disabled = false; spinBtn.textContent = "Крутить";
+  }, 6100);
+});
+
+toLoadoutsBtn.addEventListener("click", () => { showScreen("loadoutsScreen"); document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active")); document.querySelector('.mode-btn[data-screen="loadoutsScreen"]').classList.add("active"); });
+
+function startInlineEdit(chipEl, teamName, playerIndex) {
+  if (chipEl.classList.contains('editing')) return;
+  const currentName = teamRosters[teamName][playerIndex], input = document.createElement('input');
+  input.type = 'text'; input.className = 'team-chip-input'; input.value = currentName;
+  chipEl.classList.add('editing'); chipEl.textContent = ''; chipEl.appendChild(input); input.focus(); input.select();
+  const parentRow = chipEl.closest('.team-row');
+  if (parentRow) { const chip = parentRow.querySelector('.team-chip'); if (chip) chip.draggable = false; }
+  function saveEdit() { const newName = input.value.trim() || currentName; teamRosters[teamName][playerIndex] = newName; chipEl.classList.remove('editing'); chipEl.textContent = newName; if (parentRow) { const chip = parentRow.querySelector('.team-chip'); if (chip) chip.draggable = true; } }
+  input.addEventListener('blur', saveEdit);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } if (e.key === 'Escape') { input.value = currentName; input.blur(); } });
+}
+
+function openRosterModal(teamName) {
+  currentEditingTeam = teamName; document.getElementById("modalTeamName").textContent = teamName;
+  const roster = teamRosters[teamName] || ["", "", ""], marks = teamMarks[teamName] || [false, false, false];
+  document.getElementById("p1").value = roster[0] || ""; document.getElementById("p2").value = roster[1] || ""; document.getElementById("p3").value = roster[2] || "";
+  document.getElementById("mark1").checked = marks[0]; document.getElementById("mark2").checked = marks[1]; document.getElementById("mark3").checked = marks[2];
+  document.getElementById("rosterModal").classList.add("active");
+}
+
+document.getElementById("saveRoster").addEventListener("click", () => {
+  if (currentEditingTeam) {
+    teamRosters[currentEditingTeam] = [document.getElementById("p1").value || "Игрок 1", document.getElementById("p2").value || "Игрок 2", document.getElementById("p3").value || "Игрок 3"];
+    teamMarks[currentEditingTeam] = [document.getElementById("mark1").checked, document.getElementById("mark2").checked, document.getElementById("mark3").checked];
+    document.getElementById("rosterModal").classList.remove("active"); renderTeamManagement();
+  }
+});
+document.getElementById("closeRoster").addEventListener("click", () => { document.getElementById("rosterModal").classList.remove("active"); });
+
+poolTeamsEl.addEventListener("dragover", (e) => e.preventDefault());
+poolTeamsEl.addEventListener("drop", (e) => { e.preventDefault(); const team = e.dataTransfer.getData("text/plain"); if (!team) return; Object.keys(teamGroups).forEach(g => { teamGroups[g] = teamGroups[g].filter(t => t !== team); }); renderTeamManagement(); });
+
+function createTeamRow(team) {
+  const container = document.createElement("div"); container.className = "team-row";
+  const chip = document.createElement("div"); chip.className = "team-chip"; chip.draggable = true; chip.textContent = team; chip.dataset.team = team;
+  chip.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", team); chip.classList.add("dragging"); });
+  chip.addEventListener("dragend", () => { chip.classList.remove("dragging"); });
+  const editBtn = document.createElement("button"); editBtn.className = "edit-btn"; editBtn.innerHTML = "✎";
+  editBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openRosterModal(team); };
+  container.appendChild(chip); container.appendChild(editBtn); return container;
+}
+
+function renderTeamManagement() {
+  const groupsColumn = document.getElementById("groupsColumn"); groupsColumn.innerHTML = ""; poolTeamsEl.innerHTML = "";
+  const groupLabels = ["А", "Б", "В", "Г"];
+  for (let i = 0; i < 4; i++) {
+    const label = groupLabels[i], slot = document.createElement("div"); slot.className = "group-slot"; slot.dataset.group = label;
+    const teamsInGroup = teamGroups[label] || [];
+    slot.innerHTML = `<div class="group-slot-header"><div class="group-slot-title">Группа ${label}</div><div class="group-slot-count">${teamsInGroup.length}/4</div></div><div class="group-teams" data-group="${label}"></div>`;
+    const teamsContainer = slot.querySelector(".group-teams"); teamsInGroup.forEach(team => { teamsContainer.appendChild(createTeamRow(team)); });
+    slot.addEventListener("dragover", (e) => { e.preventDefault(); slot.classList.add("drag-over"); });
+    slot.addEventListener("dragleave", () => { slot.classList.remove("drag-over"); });
+    slot.addEventListener("drop", (e) => { e.preventDefault(); slot.classList.remove("drag-over"); const team = e.dataTransfer.getData("text/plain"); if (!team) return; Object.keys(teamGroups).forEach(g => { teamGroups[g] = teamGroups[g].filter(t => t !== team); }); if (teamGroups[label].length < 4) teamGroups[label].push(team); renderTeamManagement(); });
+    groupsColumn.appendChild(slot);
+  }
+  const assignedTeams = new Set(); Object.values(teamGroups).forEach(g => g.forEach(t => assignedTeams.add(t)));
+  DATA.teamNames.forEach(team => { if (!assignedTeams.has(team)) poolTeamsEl.appendChild(createTeamRow(team)); });
+}
+
+function pickRandom(arr, count) { const copy = [...arr], result = []; for (let i = 0; i < count && copy.length > 0; i++) { result.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]); } return result; }
+function generateOneLoadout(isMelee = false) {
+  const classes = Object.keys(DATA.loadouts), clsKey = classes[Math.floor(Math.random() * classes.length)], cls = DATA.loadouts[clsKey];
+  let finalWeapon = cls.weapons[Math.floor(Math.random() * cls.weapons.length)], finalAbility = cls.abilities[Math.floor(Math.random() * cls.abilities.length)], finalGadgets = pickRandom(cls.gadgets, 3);
+  if (isMelee) { if (clsKey === "light") finalWeapon = "XP-54"; if (clsKey === "medium") finalWeapon = "AKM"; if (clsKey === "heavy") finalWeapon = "M60"; }
+  return { className: cls.className, ability: finalAbility, weapon: finalWeapon, gadgets: finalGadgets };
+}
+function formatLoadout(l) { return `${l.className} | ${l.ability} | ${l.weapon} | ${l.gadgets.join(", ")}`; }
+
+function generateLoadouts() {
+  const isMeta = currentModifier && currentModifier.name === "Мета Билд", isScout = currentModifier && currentModifier.name === "Разведчик", isMelee = currentModifier && currentModifier.name === "Рукопашка";
+  if (isMeta) { setupSlotMachine(); document.getElementById("metaSlotScreen").classList.add("active"); return; }
+  document.getElementById("emptyState").style.display = "none"; const groupsResults = document.getElementById("groupsResults"); groupsResults.style.display = "grid"; groupsResults.innerHTML = "";
+  const groupLabels = ["А", "Б", "В", "Г"]; let fullCopyText = "";
+  groupLabels.forEach(groupLabel => {
+    const teamsInGroup = teamGroups[groupLabel] || []; if (teamsInGroup.length === 0) return;
+    fullCopyText += `=== ГРУППА ${groupLabel} ===\n`; const card = document.createElement("div"); card.className = "group-result-card"; let html = `<h3>Группа ${groupLabel}</h3>`;
+    teamsInGroup.forEach(teamName => {
+      html += `<div class="team-in-group"><div class="team-in-group-name">${teamName}</div>`; fullCopyText += `\n[ ${teamName} ]\n`;
+      const players = teamRosters[teamName] || ["Игрок 1", "Игрок 2", "Игрок 3"], marks = teamMarks[teamName] || [false, false, false];
+      if (isScout) {
+        let markedIndex = marks.findIndex(m => m); if (markedIndex === -1) markedIndex = 2; const otherPlayers = [0, 1, 2].filter(i => i !== markedIndex);
+        for (let idx of otherPlayers) { const pName = players[idx] || `Игрок ${idx+1}`, l = generateOneLoadout(isMelee); html += `<div class="player-row"><span class="label">${pName}:</span> ${formatLoadout(l)}</div>`; fullCopyText += `- ${pName}: ${formatLoadout(l)}\n`; }
+        html += `<div class="player-row" style="color: var(--muted);"><span class="label">👁 ${players[markedIndex]}:</span> НАБЛЮДАТЕЛЬ</div>`; fullCopyText += `- 👁 ${players[markedIndex]}: НАБЛЮДАТЕЛЬ\n`;
+      } else {
+        for (let p = 0; p < 3; p++) { const pName = players[p] || `Игрок ${p+1}`, l = generateOneLoadout(isMelee); html += `<div class="player-row"><span class="label">${pName}:</span> ${formatLoadout(l)}</div>`; fullCopyText += `- ${pName}: ${formatLoadout(l)}\n`; }
+      }
+      html += `</div>`;
+    });
+    card.innerHTML = html; groupsResults.appendChild(card); fullCopyText += "\n";
+  });
+  const copyAllBtn = document.createElement("button"); copyAllBtn.className = "copy-all-btn"; copyAllBtn.textContent = "📋 Скопировать всю сетку";
+  copyAllBtn.onclick = () => { navigator.clipboard.writeText(fullCopyText.trim()).then(() => { copyAllBtn.textContent = "✓ Скопировано!"; copyAllBtn.classList.add("copied"); setTimeout(() => { copyAllBtn.textContent = "📋 Скопировать всю сетку"; copyAllBtn.classList.remove("copied"); }, 2000); }); };
+  groupsResults.appendChild(copyAllBtn);
+}
+
+document.getElementById("generateBtn").addEventListener("click", generateLoadouts);
+document.getElementById("generateBtnEmpty").addEventListener("click", generateLoadouts);
+
+function setupSlotMachine() {
+  const classKeys = Object.keys(DATA.loadouts), targetClassKey = classKeys[Math.floor(Math.random() * classKeys.length)], clsData = DATA.loadouts[targetClassKey];
+  const targetLoadout = { className: clsData.className, ability: clsData.abilities[Math.floor(Math.random() * clsData.abilities.length)], weapon: clsData.weapons[Math.floor(Math.random() * clsData.weapons.length)], gadgets: pickRandom(clsData.gadgets, 3) };
+  lastMetaLoadout = targetLoadout;
+  const reels = { class: document.getElementById("reelClass"), ability: document.getElementById("reelAbility"), weapon: document.getElementById("reelWeapon"), g1: document.getElementById("reelG1"), g2: document.getElementById("reelG2"), g3: document.getElementById("reelG3") };
+  const allClasses = Object.values(DATA.loadouts).map(c => c.className), allAbilities = Object.values(DATA.loadouts).flatMap(c => c.abilities), allWeapons = Object.values(DATA.loadouts).flatMap(c => c.weapons), allGadgets = Object.values(DATA.loadouts).flatMap(c => c.gadgets);
+  Object.values(reels).forEach(r => { r.textContent = "???"; r.classList.remove("final"); });
+  const spinBtnSlot = document.getElementById("spinSlotBtn"); spinBtnSlot.disabled = false; spinBtnSlot.textContent = "КРУТИТЬ";
+  document.getElementById("slotResult").classList.remove("show"); document.getElementById("slotMachine").style.display = "grid"; spinBtnSlot.style.display = "inline-block";
+  function updateReelText(reelEl, options) { reelEl.textContent = options[Math.floor(Math.random() * options.length)]; }
+  function startReel(reelEl, finalText, options, startTime, stopTime) {
+    setTimeout(() => { reelEl.classList.remove("final"); updateReelText(reelEl, options); const interval = setInterval(() => { updateReelText(reelEl, options); }, 100); setTimeout(() => { clearInterval(interval); reelEl.textContent = finalText; reelEl.classList.add("final"); }, stopTime - startTime); }, startTime);
+  }
+  spinBtnSlot.onclick = () => {
+    spinBtnSlot.disabled = true; spinBtnSlot.textContent = "ГЕНЕРАЦИЯ...";
+    startReel(reels.class, targetLoadout.className, allClasses, 0, 1500); startReel(reels.ability, targetLoadout.ability, allAbilities, 300, 2000);
+    startReel(reels.weapon, targetLoadout.weapon, allWeapons, 600, 2500); startReel(reels.g1, targetLoadout.gadgets[0], allGadgets, 900, 3000);
+    startReel(reels.g2, targetLoadout.gadgets[1], allGadgets, 1200, 3500); startReel(reels.g3, targetLoadout.gadgets[2], allGadgets, 1500, 4000);
+    setTimeout(() => {
+      document.getElementById("slotMachine").style.display = "none"; spinBtnSlot.style.display = "none"; document.getElementById("slotTitle").textContent = "ЭТО МЕТА?";
+      const resultText = `${targetLoadout.className} | ${targetLoadout.ability} | ${targetLoadout.weapon} | ${targetLoadout.gadgets.join(", ")}`;
+      document.getElementById("metaResultText").textContent = resultText; document.getElementById("slotResult").classList.add("show");
+      document.getElementById("copyMetaBtn").onclick = () => { navigator.clipboard.writeText(`ОБЩИЙ ЛОДАУТ:\n${resultText}`).then(() => { document.getElementById("copyMetaBtn").textContent = "✓ Скопировано"; setTimeout(() => { document.getElementById("copyMetaBtn").textContent = "Копировать"; }, 1500); }); };
+    }, 4500);
+  };
+}
+
+document.getElementById("closeSlotBtn").addEventListener("click", () => {
+  document.getElementById("metaSlotScreen").classList.remove("active"); document.getElementById("slotTitle").textContent = "ГЕНЕРАЦИЯ МЕТА БИЛДА";
+  if (lastMetaLoadout) {
+    document.getElementById("emptyState").style.display = "none"; const groupsResults = document.getElementById("groupsResults"); groupsResults.style.display = "grid"; groupsResults.innerHTML = "";
+    const formatted = formatLoadout(lastMetaLoadout), card = document.createElement("div"); card.className = "group-result-card";
+    card.innerHTML = `<h3>⭐ ОБЩИЙ ЛОДАУТ ДЛЯ ВСЕХ ⭐</h3><div class="player-row" style="font-size: 16px; font-weight: bold; color: var(--jackpot); margin-bottom: 15px;">${formatted}</div>`;
+    groupsResults.appendChild(card);
+    const copyAllBtn = document.createElement("button"); copyAllBtn.className = "copy-all-btn"; copyAllBtn.textContent = "📋 Скопировать общий лодаут";
+    copyAllBtn.onclick = () => { navigator.clipboard.writeText(`Общий лодаут для всех:\n${formatted}`).then(() => { copyAllBtn.textContent = "✓ Скопировано!"; setTimeout(() => { copyAllBtn.textContent = "📋 Скопировать общий лодаут"; }, 1500); }); };
+    groupsResults.appendChild(copyAllBtn);
+  }
+});
+
+renderWheel();
+</script>
+</body>
+</html>
