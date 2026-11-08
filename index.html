@@ -13,7 +13,6 @@
   body { background: var(--bg); color: var(--text); font-family: 'Inter', 'Segoe UI', sans-serif; min-height: 100vh; padding: 30px; overflow-x: hidden; }
   
   /* === НАСТРОЙКИ ДЛЯ СТРИМЕРА === */
-  /* Скрываем только лишние кнопки, но оставляем вкладки сеток */
   body.streamer-mode #spinBtn,
   body.streamer-mode #toLoadoutsBtn,
   body.streamer-mode .mode-btn[data-screen="teamManagementScreen"],
@@ -22,23 +21,10 @@
   body.streamer-mode .edit-btn {
     display: none !important;
   }
-
-  /* Разрешаем кликать по кнопкам "Основная сетка" и "Полуфинал" */
   body.streamer-mode .mode-btn {
     pointer-events: auto !important;
     opacity: 1 !important;
   }
-
-  /* КОЛЕСО ПОСТОЯННО КРУТИТСЯ у стримера */
-  body.streamer-mode .wheel {
-    animation: slowSpin 15s linear infinite !important;
-  }
-  @keyframes slowSpin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  /* Увеличиваем текст результата для красоты на стриме */
   body.streamer-mode .result { margin-top: 50px; }
   body.streamer-mode .result h2 { font-size: 72px; }
   /* ================================ */
@@ -106,7 +92,7 @@
   .slot-machine { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; background: var(--panel); padding: 25px; border: 3px solid var(--jackpot); border-radius: 12px; box-shadow: 0 0 50px rgba(255, 87, 34, 0.25); margin-bottom: 40px; width: 95%; max-width: 1000px; }
   .reel-container { height: 80px; overflow: hidden; background: #000; border: 1px solid var(--border); border-radius: 6px; position: relative; display: flex; align-items: center; justify-content: center; }
   .reel-text { font-size: 12px; font-weight: 700; color: var(--text); text-transform: uppercase; text-align: center; padding: 0 5px; transition: all 0.3s ease; line-height: 1.2; }
-  .reel-text.final { color: var(--jackpot) !ant; font-size: 13px; font-weight: 900; text-shadow: 0 0 15px var(--jackpot); transform: scale(1.1); }
+  .reel-text.final { color: var(--jackpot) !important; font-size: 13px; font-weight: 900; text-shadow: 0 0 15px var(--jackpot); transform: scale(1.1); }
   .slot-result { display: none; text-align: center; animation: flyIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
   .slot-result.show { display: block; }
   .meta-loadout-card { background: var(--panel); border: 2px solid var(--jackpot); padding: 30px; min-width: 400px; position: relative; box-shadow: 0 0 40px rgba(255, 87, 34, 0.2); }
@@ -122,10 +108,8 @@
   .team-chip-input { background: var(--bg); border: 1px solid var(--accent); color: var(--text); padding: 6px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; width: 100%; outline: none; }
 </style>
 
-  <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-  
 </head>
 <body>
 
@@ -211,17 +195,7 @@
   </div>
 </div>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-
 <script>
-// ===== FIREBASE КОНФИГ =====
-
-
-// ============================
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyAAHFtqWnnxHSDcAgpKGcCUQXA3VlTA8oU",
   authDomain: "farum-tournament.firebaseapp.com",
@@ -233,126 +207,77 @@ const firebaseConfig = {
   measurementId: "G-TBRZ17V109"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const resultRef = db.ref('wheel/result');
 
-// Определяем режим: стример или организатор
 const isStreamer = window.location.search.includes('streamer=1');
 if (isStreamer) document.body.classList.add('streamer-mode');
 
-// Логика для стримеров
+// === ЛОГИКА ДЛЯ СТРИМЕРОВ ===
 if (isStreamer) {
-  // При загрузке скрываем результат
+  document.getElementById('resultName').textContent = '';
+  document.getElementById('resultDesc').textContent = '';
   document.getElementById('result').style.display = 'none';
-  
+  document.getElementById('result').classList.remove('show');
+
   resultRef.on('value', (snapshot) => {
     const data = snapshot.val();
-    if (data) {
-      // Если пришла команда "начать вращение"
-      if (data.isSpinning === true) {
-        console.log('Начинаю вращение...');
-        // Скрываем старый результат
-        document.getElementById('result').style.display = 'none';
-        document.getElementById('result').classList.remove('show');
-        
-        // Сбрасываем подсветку секторов
-        const labels = document.querySelectorAll('.wheel-sector-label');
-        for(let lbl of labels) {
-          lbl.style.color = "var(--text)";
-          lbl.style.textShadow = "none";
-        }
-        
-        // Запускаем ту же анимацию вращения, что и у организатора
-        const wheel = document.getElementById('wheel');
-        wheel.classList.remove('spinning');
-        void wheel.offsetWidth; // Триггер перерисовки
-        wheel.classList.add('spinning');
-        
-        // Применяем тот же угол вращения (берём из timestamp как случайное число)
-        const randomOffset = (data.timestamp % 360);
-        wheel.style.transform = `rotate(${randomOffset}deg)`;
-        
-      } 
-      // Если пришла команда "остановиться и показать результат"
-      else if (data.isSpinning === false && data.name) {
-        console.log('Останавливаюсь, показываю:', data.name);
-        
-        // Ждём завершения анимации (6 секунд)
-        setTimeout(() => {
-          document.getElementById('resultName').textContent = data.name;
-          document.getElementById('resultDesc').textContent = data.description || '';
-          document.getElementById('result').style.display = 'block';
-          setTimeout(() => document.getElementById('result').classList.add('show'), 10);
-          
-          // Подсвечиваем выпавший сектор
-          const labels = document.querySelectorAll('.wheel-sector-label');
-          for(let lbl of labels) {
-            if(lbl.textContent === data.name) {
-              lbl.style.color = "var(--accent)";
-              lbl.style.textShadow = "0 0 12px var(--accent)";
-            } else {
-              lbl.style.color = "var(--text)";
-              lbl.style.textShadow = "none";
-            }
-          }
-        }, 6100);
+    if (!data) return;
+
+    const wheel = document.getElementById('wheel');
+
+    if (data.isSpinning === true) {
+      document.getElementById('result').style.display = 'none';
+      document.getElementById('result').classList.remove('show');
+      
+      const labels = document.querySelectorAll('.wheel-sector-label');
+      for(let lbl of labels) {
+        lbl.style.color = "var(--text)";
+        lbl.style.textShadow = "none";
       }
-    }
-  });
-}
-
-  // 2. Слушаем изменения из Firebase
-  resultRef.on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-      // МАГИЯ: Показываем результат ТОЛЬКО если он свежий (получен за последние 15 секунд)
-      // Это решает проблему показа старого модификатора при обновлении страницы!
-      const isFresh = (Date.now() - data.timestamp) < 15000;
-
-      if (isFresh) {
+      
+      wheel.classList.remove('spinning');
+      void wheel.offsetWidth; 
+      wheel.classList.add('spinning');
+      if (data.rotation) {
+        wheel.style.transform = `rotate(${data.rotation}deg)`;
+      }
+    } 
+    else if (data.isSpinning === false && data.name) {
+      setTimeout(() => {
         document.getElementById('resultName').textContent = data.name;
         document.getElementById('resultDesc').textContent = data.description || '';
         document.getElementById('result').style.display = 'block';
         setTimeout(() => document.getElementById('result').classList.add('show'), 10);
         
-        // Подсвечиваем выпавший сектор
-        setTimeout(() => {
-          const labels = document.querySelectorAll('.wheel-sector-label');
-          for(let lbl of labels) {
-            if(lbl.textContent === data.name) {
-              lbl.style.color = "var(--accent)";
-              lbl.style.textShadow = "0 0 12px var(--accent)";
-            } else {
-              lbl.style.color = "var(--text)";
-              lbl.style.textShadow = "none";
-            }
+        const labels = document.querySelectorAll('.wheel-sector-label');
+        for(let lbl of labels) {
+          if(lbl.textContent === data.name) {
+            lbl.style.color = "var(--accent)";
+            lbl.style.textShadow = "0 0 12px var(--accent)";
+          } else {
+            lbl.style.color = "var(--text)";
+            lbl.style.textShadow = "none";
           }
-        }, 100);
-      } else {
-        // Если результат старый (страницу перезагрузили), скрываем его
-        document.getElementById('result').style.display = 'none';
-        document.getElementById('result').classList.remove('show');
-      }
+        }
+      }, 6100);
     }
   });
 }
 
-function sendResultToFirebase(name, description, isSpinning = false) {
+function sendResultToFirebase(name, description, isSpinning, rotation = 0) {
   if (!isStreamer) {
     resultRef.set({ 
       name: name, 
       description: description, 
       isSpinning: isSpinning,
+      rotation: rotation,
       timestamp: Date.now() 
     });
   }
 }
 
-// ==========================================================
-// НАСТРОЙКИ ПОРЯДКА МОДИФИКАТОРОВ
-// ==========================================================
 const MAIN_SEQUENCE = ["Мета Билд", "Разведчик", "Перемешка", "Рукопашка", "ТДМ"];
 const SEMI_SEQUENCE = ["Стенка на стенку", "Модный приговор", "Cursed dailies", "Битва умов"];
 
@@ -402,9 +327,9 @@ const toLoadoutsBtn = document.getElementById("toLoadoutsBtn"), poolTeamsEl = do
 const mode8TeamsCheckbox = document.getElementById("mode8Teams");
 
 function showScreen(screenId) { document.querySelectorAll(".screen").forEach(s => s.classList.remove("active")); document.getElementById(screenId).classList.add("active"); }
+
 document.querySelectorAll(".mode-btn").forEach(btn => {
   btn.addEventListener("click", () => {
-    // УБРАНО: if (isStreamer) return;
     document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     if (btn.dataset.mode) { currentMode = btn.dataset.mode; renderWheel(); showScreen("wheelScreen"); spinBtn.textContent = "Крутить"; spinBtn.disabled = false; } 
@@ -460,18 +385,16 @@ spinBtn.addEventListener("click", () => {
   const availableMods = getAvailableModifiers();
   if (availableMods.length === 0) { spinBtn.disabled = true; spinBtn.textContent = "Все использованы"; return; }
   const nextMod = availableMods[0]; 
-  isSpinning = true; 
-spinBtn.disabled = true;
-resultEl.classList.remove("show"); 
-resultEl.style.display = "none";
-
-// ОТПРАВЛЯЕМ КОМАНДУ "НАЧАТЬ ВРАЩЕНИЕ" СТРИМЕРАМ
-sendResultToFirebase('', '', true);
+  isSpinning = true; spinBtn.disabled = true;
   resultEl.classList.remove("show"); resultEl.style.display = "none";
+  
   const n = availableMods.length, angleStep = 360 / n;
   const winIndex = availableMods.findIndex(m => m.name === nextMod.name), targetAngle = winIndex * angleStep + angleStep / 2;
   const extraSpins = 10 + Math.floor(Math.random() * 5), offset = (Math.random() - 0.5) * angleStep * 0.3; 
   const finalRotation = wheelRotation + extraSpins * 360 + (360 - targetAngle) + offset;
+  
+  sendResultToFirebase('', '', true, finalRotation);
+  
   wheelEl.classList.add("spinning"); wheelEl.style.transform = `rotate(${finalRotation}deg)`; wheelRotation = finalRotation;
   
   setTimeout(() => {
@@ -482,8 +405,7 @@ sendResultToFirebase('', '', true);
     resultEl.style.display = "block";
     setTimeout(() => resultEl.classList.add("show"), 10);
     
-    // ОТПРАВЛЯЕМ КОМАНДУ "ОСТАНОВИТЬСЯ И ПОКАЗАТЬ РЕЗУЛЬТАТ"
-    sendResultToFirebase(currentModifier.name, currentModifier.description, false);
+    sendResultToFirebase(currentModifier.name, currentModifier.description, false, finalRotation);
     
     const labels = wheelEl.querySelectorAll('.wheel-sector-label');
     for(let lbl of labels) { if(lbl.textContent === currentModifier.name) { lbl.style.color = "var(--accent)"; lbl.style.textShadow = "0 0 12px var(--accent)"; } }
