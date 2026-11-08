@@ -80,7 +80,7 @@
   .slot-machine { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; background: var(--panel); padding: 25px; border: 3px solid var(--jackpot); border-radius: 12px; box-shadow: 0 0 50px rgba(255, 87, 34, 0.25); margin-bottom: 40px; width: 95%; max-width: 1000px; }
   .reel-container { height: 80px; overflow: hidden; background: #000; border: 1px solid var(--border); border-radius: 6px; position: relative; display: flex; align-items: center; justify-content: center; }
   .reel-text { font-size: 12px; font-weight: 700; color: var(--text); text-transform: uppercase; text-align: center; padding: 0 5px; transition: all 0.3s ease; line-height: 1.2; }
-  .reel-text.final { color: var(--jackpot) !important; font-size: 13px; font-weight: 900; text-shadow: 0 0 15px var(--jackpot); transform: scale(1.1); }
+  .reel-text.final { color: var(--jackpot) !ant; font-size: 13px; font-weight: 900; text-shadow: 0 0 15px var(--jackpot); transform: scale(1.1); }
   .slot-result { display: none; text-align: center; animation: flyIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
   .slot-result.show { display: block; }
   .meta-loadout-card { background: var(--panel); border: 2px solid var(--jackpot); padding: 30px; min-width: 400px; position: relative; box-shadow: 0 0 40px rgba(255, 87, 34, 0.2); }
@@ -197,7 +197,7 @@ const firebaseConfig = {
   measurementId: "G-TBRZ17V109"
 };
 
-// Правильная инициализация для compat-скриптов (без import)
+// Правильная инициализация для compat-скриптов (без )
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const resultRef = db.ref('wheel/result');
