@@ -220,13 +220,11 @@ if (isStreamer) {
     const data = snapshot.val();
     if (!data) return;
 
-    // Игнорируем старые данные (старше 30 секунд)
     if (Date.now() - data.timestamp > 30000) return;
 
     const wheel = document.getElementById('wheel');
 
     if (data.isSpinning === true) {
-      // Синхронизируем удаленные модификаторы и перерисовываем колесо
       if (data.mode) currentMode = data.mode;
       if (data.removed) {
         removedModifiers.main = new Set(data.removed.main || []);
@@ -378,7 +376,11 @@ function renderWheel() {
     label.textContent = m.name; label.style.color = "var(--text)"; label.style.fontSize = currentMode === "semifinal" ? "11px" : "13px";
     wheelEl.appendChild(label);
   });
-  wheelEl.classList.remove("spinning"); wheelEl.style.transform = `rotate(0deg)`; wheelRotation = 0;
+  // ИСПРАВЛЕНИЕ: форсируем reflow после сброса колеса
+  wheelEl.classList.remove("spinning"); 
+  wheelEl.style.transform = `rotate(0deg)`; 
+  void wheelEl.offsetWidth; // Форсируем браузер отрисовать промежуточное состояние
+  wheelRotation = 0;
 }
 
 spinBtn.addEventListener("click", () => {
@@ -401,13 +403,11 @@ spinBtn.addEventListener("click", () => {
   const winIndex = availableMods.findIndex(m => m.name === nextMod.name);
   const targetAngle = winIndex * angleStep + angleStep / 2;
   
-  // ИСПРАВЛЕННАЯ МАТЕМАТИКА: правильный расчёт угла для остановки на нужном секторе
-  const targetPos = (360 - targetAngle) % 360; // Где должен оказаться сектор (сверху)
-  const currentPos = wheelRotation % 360; // Текущее положение колеса
-  let distanceToTarget = targetPos - currentPos; // Сколько нужно довернуть
-  if (distanceToTarget < 0) distanceToTarget += 360; // Гарантируем движение вперёд
+  const targetPos = (360 - targetAngle) % 360;
+  const currentPos = wheelRotation % 360;
+  let distanceToTarget = targetPos - currentPos;
+  if (distanceToTarget < 0) distanceToTarget += 360;
   
-  // УВЕЛИЧЕНО: 12-18 полных оборотов вместо 8-12
   const extraSpins = 12 + Math.floor(Math.random() * 7);
   const offset = (Math.random() - 0.5) * angleStep * 0.3;
   const finalRotation = wheelRotation + (extraSpins * 360) + distanceToTarget + offset;
