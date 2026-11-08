@@ -1,0 +1,22 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAAHFtqWnnxHSDcAgpKGcCUQXA3VlTA8oU",
+  authDomain: "farum-tournament.firebaseapp.com",
+  databaseURL: "https://farum-tournament-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "farum-tournament",
+  storageBucket: "farum-tournament.firebasestorage.app",
+  messagingSenderId: "339560092273",
+  appId: "1:339560092273:web:49fbee8bee8ad6093641d0",
+  measurementId: "G-TBRZ17V109"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
