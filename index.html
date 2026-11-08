@@ -244,18 +244,64 @@ if (isStreamer) document.body.classList.add('streamer-mode');
 
 // Логика для стримеров
 if (isStreamer) {
-  // 1. ПРИ ЗАГРУЗКЕ: Сразу очищаем экран, чтобы не показывать старый результат
-  document.getElementById('resultName').textContent = '';
-  document.getElementById('resultDesc').textContent = '';
+  // При загрузке скрываем результат
   document.getElementById('result').style.display = 'none';
-  document.getElementById('result').classList.remove('show');
   
-  // Сбрасываем подсветку секторов при загрузке
-  const initLabels = document.querySelectorAll('.wheel-sector-label');
-  for(let lbl of initLabels) {
-    lbl.style.color = "var(--text)";
-    lbl.style.textShadow = "none";
-  }
+  resultRef.on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      // Если пришла команда "начать вращение"
+      if (data.isSpinning === true) {
+        console.log('Начинаю вращение...');
+        // Скрываем старый результат
+        document.getElementById('result').style.display = 'none';
+        document.getElementById('result').classList.remove('show');
+        
+        // Сбрасываем подсветку секторов
+        const labels = document.querySelectorAll('.wheel-sector-label');
+        for(let lbl of labels) {
+          lbl.style.color = "var(--text)";
+          lbl.style.textShadow = "none";
+        }
+        
+        // Запускаем ту же анимацию вращения, что и у организатора
+        const wheel = document.getElementById('wheel');
+        wheel.classList.remove('spinning');
+        void wheel.offsetWidth; // Триггер перерисовки
+        wheel.classList.add('spinning');
+        
+        // Применяем тот же угол вращения (берём из timestamp как случайное число)
+        const randomOffset = (data.timestamp % 360);
+        wheel.style.transform = `rotate(${randomOffset}deg)`;
+        
+      } 
+      // Если пришла команда "остановиться и показать результат"
+      else if (data.isSpinning === false && data.name) {
+        console.log('Останавливаюсь, показываю:', data.name);
+        
+        // Ждём завершения анимации (6 секунд)
+        setTimeout(() => {
+          document.getElementById('resultName').textContent = data.name;
+          document.getElementById('resultDesc').textContent = data.description || '';
+          document.getElementById('result').style.display = 'block';
+          setTimeout(() => document.getElementById('result').classList.add('show'), 10);
+          
+          // Подсвечиваем выпавший сектор
+          const labels = document.querySelectorAll('.wheel-sector-label');
+          for(let lbl of labels) {
+            if(lbl.textContent === data.name) {
+              lbl.style.color = "var(--accent)";
+              lbl.style.textShadow = "0 0 12px var(--accent)";
+            } else {
+              lbl.style.color = "var(--text)";
+              lbl.style.textShadow = "none";
+            }
+          }
+        }, 6100);
+      }
+    }
+  });
+}
 
   // 2. Слушаем изменения из Firebase
   resultRef.on('value', (snapshot) => {
@@ -293,10 +339,14 @@ if (isStreamer) {
   });
 }
 
-// Функция отправки результата (для организатора)
-function sendResultToFirebase(name, description) {
+function sendResultToFirebase(name, description, isSpinning = false) {
   if (!isStreamer) {
-    resultRef.set({ name: name, description: description, timestamp: Date.now() });
+    resultRef.set({ 
+      name: name, 
+      description: description, 
+      isSpinning: isSpinning,
+      timestamp: Date.now() 
+    });
   }
 }
 
@@ -410,7 +460,13 @@ spinBtn.addEventListener("click", () => {
   const availableMods = getAvailableModifiers();
   if (availableMods.length === 0) { spinBtn.disabled = true; spinBtn.textContent = "Все использованы"; return; }
   const nextMod = availableMods[0]; 
-  isSpinning = true; spinBtn.disabled = true;
+  isSpinning = true; 
+spinBtn.disabled = true;
+resultEl.classList.remove("show"); 
+resultEl.style.display = "none";
+
+// ОТПРАВЛЯЕМ КОМАНДУ "НАЧАТЬ ВРАЩЕНИЕ" СТРИМЕРАМ
+sendResultToFirebase('', '', true);
   resultEl.classList.remove("show"); resultEl.style.display = "none";
   const n = availableMods.length, angleStep = 360 / n;
   const winIndex = availableMods.findIndex(m => m.name === nextMod.name), targetAngle = winIndex * angleStep + angleStep / 2;
@@ -426,8 +482,8 @@ spinBtn.addEventListener("click", () => {
     resultEl.style.display = "block";
     setTimeout(() => resultEl.classList.add("show"), 10);
     
-    // ОТПРАВКА РЕЗУЛЬТАТА В FIREBASE
-    sendResultToFirebase(currentModifier.name, currentModifier.description);
+    // ОТПРАВЛЯЕМ КОМАНДУ "ОСТАНОВИТЬСЯ И ПОКАЗАТЬ РЕЗУЛЬТАТ"
+    sendResultToFirebase(currentModifier.name, currentModifier.description, false);
     
     const labels = wheelEl.querySelectorAll('.wheel-sector-label');
     for(let lbl of labels) { if(lbl.textContent === currentModifier.name) { lbl.style.color = "var(--accent)"; lbl.style.textShadow = "0 0 12px var(--accent)"; } }
