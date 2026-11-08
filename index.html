@@ -12,10 +12,13 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'Inter', 'Segoe UI', sans-serif; min-height: 100vh; padding: 30px; overflow-x: hidden; }
   
-  /* Скрываем элементы управления в режиме стримера */
-  body.streamer-mode header, body.streamer-mode .controls, body.streamer-mode .btn-row { display: none !important; }
-  body.streamer-mode .result { margin-top: 50px; }
-  body.streamer-mode .result h2 { font-size: 64px; }
+   /* В режиме стримера показываем всё, но делаем кнопки неактивными */
+   body.streamer-mode .btn { pointer-events: none; opacity: 0.5; }
+   body.streamer-mode .mode-btn { pointer-events: none; }
+   body.streamer-mode .edit-btn { display: none; }
+   body.streamer-mode .teams-mode-toggle { display: none; }
+   body.streamer-mode .result { margin-top: 50px; }
+   body.streamer-mode .result h2 { font-size: 64px; }
 
   header { display: flex; justify-content: center; gap: 10px; margin-bottom: 40px; position: relative; flex-wrap: wrap; }
   .mode-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 10px 24px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.3s; }
@@ -290,8 +293,7 @@ const mode8TeamsCheckbox = document.getElementById("mode8Teams");
 function showScreen(screenId) { document.querySelectorAll(".screen").forEach(s => s.classList.remove("active")); document.getElementById(screenId).classList.add("active"); }
 
 document.querySelectorAll(".mode-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    if (isStreamer) return; // Стримеры не могут переключать вкладки
+  btn.addEventListener("click", () => {    
     document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     if (btn.dataset.mode) { currentMode = btn.dataset.mode; renderWheel(); showScreen("wheelScreen"); spinBtn.textContent = "Крутить"; spinBtn.disabled = false; } 
