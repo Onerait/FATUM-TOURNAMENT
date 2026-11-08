@@ -12,13 +12,28 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'Inter', 'Segoe UI', sans-serif; min-height: 100vh; padding: 30px; overflow-x: hidden; }
   
-   /* В режиме стримера показываем всё, но делаем кнопки неактивными */
-   body.streamer-mode .btn { pointer-events: none; opacity: 0.5; }
-   body.streamer-mode .mode-btn { pointer-events: none; }
-   body.streamer-mode .edit-btn { display: none; }
-   body.streamer-mode .teams-mode-toggle { display: none; }
-   body.streamer-mode .result { margin-top: 50px; }
-   body.streamer-mode .result h2 { font-size: 64px; }
+/* Скрываем элементы управления в режиме стримера */
+body.streamer-mode .btn-row button { pointer-events: none; opacity: 0.5; }
+body.streamer-mode .mode-btn[data-screen="teamManagementScreen"],
+body.streamer-mode .mode-btn[data-screen="loadoutsScreen"] { display: none; }
+body.streamer-mode .teams-mode-toggle { display: none; }
+body.streamer-mode .edit-btn { display: none; }
+body.streamer-mode .result { margin-top: 50px; }
+body.streamer-mode .result h2 { font-size: 64px; }
+
+/* Анимация медленного вращения колеса для стримера */
+body.streamer-mode .wheel {
+  animation: slowSpin 20s linear infinite;
+}
+@keyframes slowSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Остановка анимации при получении результата */
+body.streamer-mode .wheel.stopped {
+  animation: none;
+}
 
   header { display: flex; justify-content: center; gap: 10px; margin-bottom: 40px; position: relative; flex-wrap: wrap; }
   .mode-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 10px 24px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.3s; }
@@ -221,13 +236,30 @@ if (isStreamer) document.body.classList.add('streamer-mode');
 
 // Логика для стримеров (только слушают результат)
 if (isStreamer) {
+  console.log('Режим стримера активирован, слушаю изменения...');
   resultRef.on('value', (snapshot) => {
+    console.log('Получены данные:', snapshot.val());
     const data = snapshot.val();
     if (data) {
+      // Останавливаем вращение колеса
+      document.getElementById('wheel').classList.add('stopped');
+      
+      // Показываем результат
       document.getElementById('resultName').textContent = data.name;
       document.getElementById('resultDesc').textContent = data.description || '';
       document.getElementById('result').style.display = 'block';
       setTimeout(() => document.getElementById('result').classList.add('show'), 10);
+      
+      // Подсвечиваем выпавший сектор
+      setTimeout(() => {
+        const labels = document.querySelectorAll('.wheel-sector-label');
+        for(let lbl of labels) {
+          if(lbl.textContent === data.name) {
+            lbl.style.color = "var(--accent)";
+            lbl.style.textShadow = "0 0 12px var(--accent)";
+          }
+        }
+      }, 100);
     }
   });
 }
@@ -291,9 +323,9 @@ const toLoadoutsBtn = document.getElementById("toLoadoutsBtn"), poolTeamsEl = do
 const mode8TeamsCheckbox = document.getElementById("mode8Teams");
 
 function showScreen(screenId) { document.querySelectorAll(".screen").forEach(s => s.classList.remove("active")); document.getElementById(screenId).classList.add("active"); }
-
 document.querySelectorAll(".mode-btn").forEach(btn => {
-  btn.addEventListener("click", () => {    
+  btn.addEventListener("click", () => {
+    // УБРАНО: if (isStreamer) return;
     document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     if (btn.dataset.mode) { currentMode = btn.dataset.mode; renderWheel(); showScreen("wheelScreen"); spinBtn.textContent = "Крутить"; spinBtn.disabled = false; } 
