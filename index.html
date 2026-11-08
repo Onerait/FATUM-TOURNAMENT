@@ -27,6 +27,7 @@
   }
   body.streamer-mode .result { margin-top: 50px; }
   body.streamer-mode .result h2 { font-size: 72px; }
+  /* УБРАНА бесконечная CSS-анимация, чтобы не конфликтовать с JS */
   /* ================================ */
 
   header { display: flex; justify-content: center; gap: 10px; margin-bottom: 40px; position: relative; flex-wrap: wrap; }
@@ -214,12 +215,14 @@ const resultRef = db.ref('wheel/result');
 const isStreamer = window.location.search.includes('streamer=1');
 if (isStreamer) document.body.classList.add('streamer-mode');
 
-// === ЛОГИКА ДЛЯ СТРИМЕРОВ ===
+// === ЛОГИКА ДЛЯ СТРИМЕРОВ (ЗЕРКАЛИРОВАНИЕ) ===
 if (isStreamer) {
+  // Очищаем экран при загрузке
   document.getElementById('resultName').textContent = '';
   document.getElementById('resultDesc').textContent = '';
   document.getElementById('result').style.display = 'none';
   document.getElementById('result').classList.remove('show');
+  document.getElementById('wheel').classList.remove('spinning');
 
   resultRef.on('value', (snapshot) => {
     const data = snapshot.val();
@@ -228,6 +231,7 @@ if (isStreamer) {
     const wheel = document.getElementById('wheel');
 
     if (data.isSpinning === true) {
+      // 1. НАЧАЛО ВРАЩЕНИЯ
       document.getElementById('result').style.display = 'none';
       document.getElementById('result').classList.remove('show');
       
@@ -237,31 +241,30 @@ if (isStreamer) {
         lbl.style.textShadow = "none";
       }
       
+      // Перезапуск анимации
       wheel.classList.remove('spinning');
-      void wheel.offsetWidth; 
+      void wheel.offsetWidth; // Принудительная перерисовка
       wheel.classList.add('spinning');
-      if (data.rotation) {
-        wheel.style.transform = `rotate(${data.rotation}deg)`;
-      }
+      wheel.style.transform = `rotate(${data.rotation}deg)`;
     } 
     else if (data.isSpinning === false && data.name) {
-      setTimeout(() => {
-        document.getElementById('resultName').textContent = data.name;
-        document.getElementById('resultDesc').textContent = data.description || '';
-        document.getElementById('result').style.display = 'block';
-        setTimeout(() => document.getElementById('result').classList.add('show'), 10);
-        
-        const labels = document.querySelectorAll('.wheel-sector-label');
-        for(let lbl of labels) {
-          if(lbl.textContent === data.name) {
-            lbl.style.color = "var(--accent)";
-            lbl.style.textShadow = "0 0 12px var(--accent)";
-          } else {
-            lbl.style.color = "var(--text)";
-            lbl.style.textShadow = "none";
-          }
+      // 2. КОНЕЦ ВРАЩЕНИЯ И ПОКАЗ РЕЗУЛЬТАТА
+      // БЕЗ задержки! Организатор уже подождал 6.1 сек, показываем сразу.
+      document.getElementById('resultName').textContent = data.name;
+      document.getElementById('resultDesc').textContent = data.description || '';
+      document.getElementById('result').style.display = 'block';
+      setTimeout(() => document.getElementById('result').classList.add('show'), 10);
+      
+      const labels = document.querySelectorAll('.wheel-sector-label');
+      for(let lbl of labels) {
+        if(lbl.textContent === data.name) {
+          lbl.style.color = "var(--accent)";
+          lbl.style.textShadow = "0 0 12px var(--accent)";
+        } else {
+          lbl.style.color = "var(--text)";
+          lbl.style.textShadow = "none";
         }
-      }, 6100);
+      }
     }
   });
 }
@@ -385,18 +388,26 @@ spinBtn.addEventListener("click", () => {
   const availableMods = getAvailableModifiers();
   if (availableMods.length === 0) { spinBtn.disabled = true; spinBtn.textContent = "Все использованы"; return; }
   const nextMod = availableMods[0]; 
-  isSpinning = true; spinBtn.disabled = true;
-  resultEl.classList.remove("show"); resultEl.style.display = "none";
+  
+  isSpinning = true; 
+  spinBtn.disabled = true;
+  resultEl.classList.remove("show"); 
+  resultEl.style.display = "none";
   
   const n = availableMods.length, angleStep = 360 / n;
   const winIndex = availableMods.findIndex(m => m.name === nextMod.name), targetAngle = winIndex * angleStep + angleStep / 2;
   const extraSpins = 10 + Math.floor(Math.random() * 5), offset = (Math.random() - 0.5) * angleStep * 0.3; 
   const finalRotation = wheelRotation + extraSpins * 360 + (360 - targetAngle) + offset;
   
+  // 1. Отправляем сигнал "НАЧАТЬ ВРАЩЕНИЕ" стримерам
   sendResultToFirebase('', '', true, finalRotation);
   
-  wheelEl.classList.add("spinning"); wheelEl.style.transform = `rotate(${finalRotation}deg)`; wheelRotation = finalRotation;
+  // 2. Запускаем вращение у себя
+  wheelEl.classList.add("spinning"); 
+  wheelEl.style.transform = `rotate(${finalRotation}deg)`; 
+  wheelRotation = finalRotation;
   
+  // 3. Ждем 6.1 секунду (время анимации)
   setTimeout(() => {
     currentModifier = nextMod;
     resultName.textContent = currentModifier.name;
@@ -405,11 +416,15 @@ spinBtn.addEventListener("click", () => {
     resultEl.style.display = "block";
     setTimeout(() => resultEl.classList.add("show"), 10);
     
+    // 4. Отправляем сигнал "СТОП И ПОКАЗАТЬ РЕЗУЛЬТАТ" стримерам
     sendResultToFirebase(currentModifier.name, currentModifier.description, false, finalRotation);
     
     const labels = wheelEl.querySelectorAll('.wheel-sector-label');
     for(let lbl of labels) { if(lbl.textContent === currentModifier.name) { lbl.style.color = "var(--accent)"; lbl.style.textShadow = "0 0 12px var(--accent)"; } }
-    isSpinning = false; spinBtn.disabled = false; spinBtn.textContent = "Крутить";
+    
+    isSpinning = false; 
+    spinBtn.disabled = false; 
+    spinBtn.textContent = "Крутить";
   }, 6100);
 });
 
