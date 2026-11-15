@@ -16,6 +16,7 @@
   body.streamer-mode #toLoadoutsBtn,
   body.streamer-mode .mode-btn[data-screen="teamManagementScreen"],
   body.streamer-mode .mode-btn[data-screen="loadoutsScreen"],
+  body.streamer-mode .mode-btn[data-mode="semifinal"],
   body.streamer-mode .teams-mode-toggle,
   body.streamer-mode .edit-btn { display: none !important; }
   
@@ -284,14 +285,20 @@ const MAIN_SEQUENCE = ["Мета Билд", "Разведчик", "Переме�
 const SEMI_SEQUENCE = ["Стенка на стенку", "Модный приговор", "Cursed dailies", "Битва умов"];
 
 const teamPlayers = {
-  "Жабки": ["ChitSit", "Molodoi", "Tv.He_TaLenT"], "Жертвы меты": ["dedmaks", "_frost_man_", "hyperspace8"],
-  "bbycakes": ["unm3i", "sincela", "loathe"], "BANANA Team": ["Player1", "Player2", "Player3"],
-  "калопка.клан": ["Player1", "Player2", "Player3"], "Pedestrian mafia": ["Player1", "Player2", "Player3"],
-  "SKOVORODKA": ["Player1", "Player2", "Player3"], "Три Финалиста": ["Player1", "Player2", "Player3"],
-  "DOLGI": ["Player1", "Player2", "Player3"], "FatBalls": ["Player1", "Player2", "Player3"],
-  "Жертвы меты": ["Player1", "Player2", "Player3"], "bbycakes": ["Player1", "Player2", "Player3"],
-  "OCEAN": ["Player1", "Player2", "Player3"], "Default Knights": ["Player1", "Player2", "Player3"],
-  "Чимпинкинки": ["Player1", "Player2", "Player3"], "TO4KA": ["Player1", "Player2", "Player3"]
+  "Жабки": ["ChitSit", "Molodoi", "Tv.He_TaLenT"], 
+  "Жертвы меты": ["dedmaks", "_frost_man_", "hyperspace8"],
+  "bbycakes": ["unm3i", "sincela", "loathe"], 
+  "BANANA Team": ["Player1", "Player2", "Player3"],
+  "калопка.клан": ["Player1", "Player2", "Player3"], 
+  "Pedestrian mafia": ["Player1", "Player2", "Player3"],
+  "SKOVORODKA": ["Player1", "Player2", "Player3"], 
+  "Три Финалиста": ["Player1", "Player2", "Player3"],
+  "DOLGI": ["Player1", "Player2", "Player3"], 
+  "FatBalls": ["Player1", "Player2", "Player3"],
+  "OCEAN": ["Player1", "Player2", "Player3"], 
+  "Default Knights": ["Player1", "Player2", "Player3"],
+  "Чимпинкинки": ["Player1", "Player2", "Player3"], 
+  "TO4KA": ["Player1", "Player2", "Player3"]
 };
 
 const DATA = {
@@ -340,18 +347,47 @@ document.querySelectorAll(".mode-btn").forEach(btn => {
 });
 
 mode8TeamsCheckbox.addEventListener("change", () => {
-  if (currentMode === "main") { removedModifiers.main.clear(); currentModifier = null; renderWheel(); spinBtn.textContent = "Крутить"; spinBtn.disabled = false; resultEl.classList.remove("show"); resultEl.style.display = "none"; }
+  if (currentMode === "main") { 
+    removedModifiers.main.clear(); 
+    // Если режим 8 команд, сразу добавляем ТДМ и Рукопашку в удаленные
+    if (mode8TeamsCheckbox.checked) {
+      removedModifiers.main.add("ТДМ");
+      removedModifiers.main.add("Рукопашка");
+    }
+    currentModifier = null; 
+    renderWheel(); 
+    spinBtn.textContent = "Крутить"; 
+    spinBtn.disabled = false; 
+    resultEl.classList.remove("show"); 
+    resultEl.style.display = "none";
+    
+    // Синхронизация состояния колеса со стримерами
+    if (!isStreamer) {
+      const removedObj = {
+        main: Array.from(removedModifiers.main),
+        semifinal: Array.from(removedModifiers.semifinal)
+      };
+      resultRef.set({
+        name: "",
+        description: "",
+        isSpinning: false,
+        rotation: 0,
+        removed: removedObj,
+        mode: currentMode,
+        timestamp: Date.now()
+      });
+    }
+  }
 });
 
 function getAvailableModifiers() {
   let sequence = currentMode === "main" ? MAIN_SEQUENCE : SEMI_SEQUENCE;
   let allMods = currentMode === "main" ? DATA.main.modifiers : DATA.semifinal.modifiers;
-  const is8TeamMode = mode8TeamsCheckbox.checked; let mods = [];
+  let mods = [];
   for (let modName of sequence) {
     let mod = allMods.find(m => m.name === modName);
-    if (mod) {
-      if (currentMode === "main" && is8TeamMode && (mod.name === "ТДМ" || mod.name === "Рукопашка")) continue;
-      if (!removedModifiers[currentMode].has(mod.name)) mods.push(mod);
+    if (mod && !removedModifiers[currentMode].has(mod.name)) {
+      mods.push(mod);
     }
   }
   return mods;
@@ -376,10 +412,9 @@ function renderWheel() {
     label.textContent = m.name; label.style.color = "var(--text)"; label.style.fontSize = currentMode === "semifinal" ? "11px" : "13px";
     wheelEl.appendChild(label);
   });
-  // ИСПРАВЛЕНИЕ: форсируем reflow после сброса колеса
   wheelEl.classList.remove("spinning"); 
   wheelEl.style.transform = `rotate(0deg)`; 
-  void wheelEl.offsetWidth; // Форсируем браузер отрисовать промежуточное состояние
+  void wheelEl.offsetWidth; 
   wheelRotation = 0;
 }
 
@@ -522,12 +557,24 @@ function generateLoadouts() {
     teamsInGroup.forEach(teamName => {
       html += `<div class="team-in-group"><div class="team-in-group-name">${teamName}</div>`; fullCopyText += `\n[ ${teamName} ]\n`;
       const players = teamRosters[teamName] || ["Игрок 1", "Игрок 2", "Игрок 3"], marks = teamMarks[teamName] || [false, false, false];
+      
       if (isScout) {
-        let markedIndex = marks.findIndex(m => m); if (markedIndex === -1) markedIndex = 2; const otherPlayers = [0, 1, 2].filter(i => i !== markedIndex);
-        for (let idx of otherPlayers) { const pName = players[idx] || `Игрок ${idx+1}`, l = generateOneLoadout(isMelee); html += `<div class="player-row"><span class="label">${pName}:</span> ${formatLoadout(l)}</div>`; fullCopyText += `- ${pName}: ${formatLoadout(l)}\n`; }
-        html += `<div class="player-row" style="color: var(--muted);"><span class="label">👁 ${players[markedIndex]}:</span> НАБЛЮДАТЕЛЬ</div>`; fullCopyText += `- 👁 ${players[markedIndex]}: НАБЛЮДАТЕЛЬ\n`;
+        let markedIndex = marks.findIndex(m => m); 
+        for (let p = 0; p < 3; p++) { 
+          const pName = players[p] || `Игрок ${p+1}`;
+          const l = generateOneLoadout(isMelee); 
+          const isMarked = (p === markedIndex);
+          const displayName = isMarked ? `${pName} (НАБЛЮДАТЕЛЬ)` : pName;
+          html += `<div class="player-row" style="${isMarked ? 'color: var(--muted);' : ''}"><span class="label">${displayName}:</span> ${formatLoadout(l)}</div>`; 
+          fullCopyText += `- ${displayName}: ${formatLoadout(l)}\n`; 
+        }
       } else {
-        for (let p = 0; p < 3; p++) { const pName = players[p] || `Игрок ${p+1}`, l = generateOneLoadout(isMelee); html += `<div class="player-row"><span class="label">${pName}:</span> ${formatLoadout(l)}</div>`; fullCopyText += `- ${pName}: ${formatLoadout(l)}\n`; }
+        for (let p = 0; p < 3; p++) { 
+          const pName = players[p] || `Игрок ${p+1}`;
+          const l = generateOneLoadout(isMelee); 
+          html += `<div class="player-row"><span class="label">${pName}:</span> ${formatLoadout(l)}</div>`; 
+          fullCopyText += `- ${pName}: ${formatLoadout(l)}\n`; 
+        }
       }
       html += `</div>`;
     });
