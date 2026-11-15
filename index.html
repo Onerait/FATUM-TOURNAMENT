@@ -94,9 +94,6 @@
   .meta-loadout-card h3 { color: var(--jackpot) !important; font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--jackpot); padding-bottom: 15px; }
   .spin-btn { background: var(--jackpot); color: #000; border: none; padding: 18px 60px; font-size: 20px; font-weight: 900; letter-spacing: 4px; text-transform: uppercase; cursor: pointer; border-radius: 6px; transition: all 0.3s; box-shadow: 0 0 25px var(--jackpot); }
   .spin-btn:hover { transform: scale(1.05); box-shadow: 0 0 50px var(--jackpot); }
-  .player-mark { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
-  .player-mark input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
-  .player-mark label { font-size: 11px; color: var(--muted); cursor: pointer; }
   .teams-mode-toggle { position: absolute; bottom: 20px; right: 20px; display: flex; align-items: center; gap: 10px; background: var(--panel); padding: 12px 18px; border: 1px solid var(--border); border-radius: 8px; z-index: 10; }
   .teams-mode-toggle input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
   .teams-mode-toggle label { font-size: 14px; font-weight: 700; color: var(--text); cursor: pointer; letter-spacing: 1px; text-transform: uppercase; }
@@ -159,9 +156,10 @@
 <div class="modal" id="rosterModal">
   <div class="modal-content">
     <h3>Состав: <span id="modalTeamName"></span></h3>
-    <div style="margin-bottom: 15px;"><input type="text" id="p1" placeholder="Никнейм игрока 1"><div class="player-mark"><input type="checkbox" id="mark1"><label for="mark1">Отметить для замены</label></div></div>
-    <div style="margin-bottom: 15px;"><input type="text" id="p2" placeholder="Никнейм игрока 2"><div class="player-mark"><input type="checkbox" id="mark2"><label for="mark2">Отметить для замены</label></div></div>
-    <div style="margin-bottom: 15px;"><input type="text" id="p3" placeholder="Никнейм игрока 3"><div class="player-mark"><input type="checkbox" id="mark3"><label for="mark3">Отметить для замены</label></div></div>
+    <!-- УБРАНЫ ГАЛОЧКИ ДЛЯ РАЗВЕДЧИКА -->
+    <div style="margin-bottom: 15px;"><input type="text" id="p1" placeholder="Никнейм игрока 1"></div>
+    <div style="margin-bottom: 15px;"><input type="text" id="p2" placeholder="Никнейм игрока 2"></div>
+    <div style="margin-bottom: 15px;"><input type="text" id="p3" placeholder="Никнейм игрока 3"></div>
     <div class="modal-actions">
       <button class="btn" id="saveRoster" style="padding: 10px;">Сохранить</button>
       <button class="btn" id="closeRoster" style="padding: 10px; border-color: var(--muted); color: var(--muted);">Отмена</button>
@@ -221,18 +219,20 @@ if (isStreamer) {
     const data = snapshot.val();
     if (!data) return;
 
-    if (Date.now() - data.timestamp > 30000) return;
+    // Игнорируем старые результаты спина, но разрешаем обновления состояния
+    if (data.name && Date.now() - data.timestamp > 30000) return;
 
     const wheel = document.getElementById('wheel');
 
-    if (data.isSpinning === true) {
-      if (data.mode) currentMode = data.mode;
-      if (data.removed) {
-        removedModifiers.main = new Set(data.removed.main || []);
-        removedModifiers.semifinal = new Set(data.removed.semifinal || []);
-      }
-      renderWheel();
+    // ВСЕГДА синхронизируем состояние (режим и удаленные модификаторы)
+    if (data.mode) currentMode = data.mode;
+    if (data.removed) {
+      removedModifiers.main = new Set(data.removed.main || []);
+      removedModifiers.semifinal = new Set(data.removed.semifinal || []);
+    }
 
+    if (data.isSpinning === true) {
+      renderWheel();
       document.getElementById('result').style.display = 'none';
       document.getElementById('result').classList.remove('show');
       
@@ -247,21 +247,30 @@ if (isStreamer) {
       wheel.classList.add('spinning');
       wheel.style.transform = `rotate(${data.rotation}deg)`;
     } 
-    else if (data.isSpinning === false && data.name) {
-      document.getElementById('resultName').textContent = data.name;
-      document.getElementById('resultDesc').textContent = data.description || '';
-      document.getElementById('result').style.display = 'block';
-      setTimeout(() => document.getElementById('result').classList.add('show'), 10);
-      
-      const labels = document.querySelectorAll('.wheel-sector-label');
-      for(let lbl of labels) {
-        if(lbl.textContent === data.name) {
-          lbl.style.color = "var(--accent)";
-          lbl.style.textShadow = "0 0 12px var(--accent)";
-        } else {
-          lbl.style.color = "var(--text)";
-          lbl.style.textShadow = "none";
+    else if (data.isSpinning === false) {
+      if (data.name) {
+        // Показываем результат спина
+        document.getElementById('resultName').textContent = data.name;
+        document.getElementById('resultDesc').textContent = data.description || '';
+        document.getElementById('result').style.display = 'block';
+        setTimeout(() => document.getElementById('result').classList.add('show'), 10);
+        
+        const labels = document.querySelectorAll('.wheel-sector-label');
+        for(let lbl of labels) {
+          if(lbl.textContent === data.name) {
+            lbl.style.color = "var(--accent)";
+            lbl.style.textShadow = "0 0 12px var(--accent)";
+          } else {
+            lbl.style.color = "var(--text)";
+            lbl.style.textShadow = "none";
+          }
         }
+      } else {
+        // ЭТО ИСПРАВЛЕНИЕ: Если имени нет, но isSpinning === false, значит это обновление состояния (например, галочка 8 команд)
+        // Просто перерисовываем колесо с новыми правилами
+        renderWheel();
+        document.getElementById('result').style.display = 'none';
+        document.getElementById('result').classList.remove('show');
       }
     }
   });
@@ -284,21 +293,26 @@ function sendResultToFirebase(name, description, isSpinning, rotation, removedOb
 const MAIN_SEQUENCE = ["Мета Билд", "Разведчик", "Перемешка", "Рукопашка", "ТДМ"];
 const SEMI_SEQUENCE = ["Стенка на стенку", "Модный приговор", "Cursed dailies", "Битва умов"];
 
+// ВНИМАНИЕ: В JavaScript нельзя иметь два одинаковых ключа в объекте. 
+// Я добавил "(Новые)" к дубликатам, чтобы они не стирали старые команды. 
+// Ты можешь переименовать их на актуальные названия прямо здесь.
 const teamPlayers = {
+  "Жертвы меты": ["dedmaks", "FROST_MAN", "Hyperspace"], 
+  "bbycakes": ["unm3i", "sincela", "loathe"],
   "Жабки": ["ChitSit", "Molodoi", "Tv.He_TaLenT"], 
-  "Жертвы меты": ["dedmaks", "_frost_man_", "hyperspace8"],
-  "bbycakes": ["unm3i", "sincela", "loathe"], 
-  "BANANA Team": ["Player1", "Player2", "Player3"],
-  "калопка.клан": ["Player1", "Player2", "Player3"], 
-  "Pedestrian mafia": ["Player1", "Player2", "Player3"],
-  "SKOVORODKA": ["Player1", "Player2", "Player3"], 
-  "Три Финалиста": ["Player1", "Player2", "Player3"],
-  "DOLGI": ["Player1", "Player2", "Player3"], 
-  "FatBalls": ["Player1", "Player2", "Player3"],
-  "OCEAN": ["Player1", "Player2", "Player3"], 
-  "Default Knights": ["Player1", "Player2", "Player3"],
-  "Чимпинкинки": ["Player1", "Player2", "Player3"], 
-  "TO4KA": ["Player1", "Player2", "Player3"]
+  "4": ["Player1", "Player2", "Player3"],
+  "5": ["Player1", "Player2", "Player3"], 
+  "6": ["Player1", "Player2", "Player3"],
+  "7": ["Player1", "Player2", "Player3"], 
+  "8": ["Player1", "Player2", "Player3"],
+  "9": ["Player1", "Player2", "Player3"], 
+  "10": ["Player1", "Player2", "Player3"],
+  "11": ["Player1", "Player2", "Player3"], 
+  "12": ["Player1", "Player2", "Player3"],
+  "13": ["Player1", "Player2", "Player3"], 
+  "14": ["Player1", "Player2", "Player3"],
+  "15": ["Player1", "Player2", "Player3"], 
+  "16": ["Player1", "Player2", "Player3"]
 };
 
 const DATA = {
@@ -325,7 +339,7 @@ const DATA = {
 
 let teamGroups = { "А": DATA.teamNames.slice(0, 4), "Б": DATA.teamNames.slice(4, 8), "В": DATA.teamNames.slice(8, 12), "Г": DATA.teamNames.slice(12, 16) };
 let teamRosters = {}, teamMarks = {};
-DATA.teamNames.forEach(name => { teamRosters[name] = teamPlayers[name] || ["Никнейм 1", "Никнейм 2", "Никнейм 3"]; teamMarks[name] = [false, false, false]; });
+DATA.teamNames.forEach(name => { teamRosters[name] = teamPlayers[name] || ["Никнейм 1", "Никнейм 2", "Никнейм 3"]; });
 
 let currentMode = "main", currentModifier = null, isSpinning = false, wheelRotation = 0;
 let removedModifiers = { main: new Set(), semifinal: new Set() }, lastMetaLoadout = null, currentEditingTeam = null;
@@ -349,7 +363,6 @@ document.querySelectorAll(".mode-btn").forEach(btn => {
 mode8TeamsCheckbox.addEventListener("change", () => {
   if (currentMode === "main") { 
     removedModifiers.main.clear(); 
-    // Если режим 8 команд, сразу добавляем ТДМ и Рукопашку в удаленные
     if (mode8TeamsCheckbox.checked) {
       removedModifiers.main.add("ТДМ");
       removedModifiers.main.add("Рукопашка");
@@ -492,17 +505,22 @@ function startInlineEdit(chipEl, teamName, playerIndex) {
 
 function openRosterModal(teamName) {
   currentEditingTeam = teamName; document.getElementById("modalTeamName").textContent = teamName;
-  const roster = teamRosters[teamName] || ["", "", ""], marks = teamMarks[teamName] || [false, false, false];
-  document.getElementById("p1").value = roster[0] || ""; document.getElementById("p2").value = roster[1] || ""; document.getElementById("p3").value = roster[2] || "";
-  document.getElementById("mark1").checked = marks[0]; document.getElementById("mark2").checked = marks[1]; document.getElementById("mark3").checked = marks[2];
+  const roster = teamRosters[teamName] || ["", "", ""];
+  document.getElementById("p1").value = roster[0] || ""; 
+  document.getElementById("p2").value = roster[1] || ""; 
+  document.getElementById("p3").value = roster[2] || "";
   document.getElementById("rosterModal").classList.add("active");
 }
 
 document.getElementById("saveRoster").addEventListener("click", () => {
   if (currentEditingTeam) {
-    teamRosters[currentEditingTeam] = [document.getElementById("p1").value || "Игрок 1", document.getElementById("p2").value || "Игрок 2", document.getElementById("p3").value || "Игрок 3"];
-    teamMarks[currentEditingTeam] = [document.getElementById("mark1").checked, document.getElementById("mark2").checked, document.getElementById("mark3").checked];
-    document.getElementById("rosterModal").classList.remove("active"); renderTeamManagement();
+    teamRosters[currentEditingTeam] = [
+      document.getElementById("p1").value || "Игрок 1", 
+      document.getElementById("p2").value || "Игрок 2", 
+      document.getElementById("p3").value || "Игрок 3"
+    ];
+    document.getElementById("rosterModal").classList.remove("active"); 
+    renderTeamManagement();
   }
 });
 document.getElementById("closeRoster").addEventListener("click", () => { document.getElementById("rosterModal").classList.remove("active"); });
@@ -547,7 +565,7 @@ function generateOneLoadout(isMelee = false) {
 function formatLoadout(l) { return `${l.className} | ${l.ability} | ${l.weapon} | ${l.gadgets.join(", ")}`; }
 
 function generateLoadouts() {
-  const isMeta = currentModifier && currentModifier.name === "Мета Билд", isScout = currentModifier && currentModifier.name === "Разведчик", isMelee = currentModifier && currentModifier.name === "Рукопашка";
+  const isMeta = currentModifier && currentModifier.name === "Мета Билд", isMelee = currentModifier && currentModifier.name === "Рукопашка";
   if (isMeta) { setupSlotMachine(); document.getElementById("metaSlotScreen").classList.add("active"); return; }
   document.getElementById("emptyState").style.display = "none"; const groupsResults = document.getElementById("groupsResults"); groupsResults.style.display = "grid"; groupsResults.innerHTML = "";
   const groupLabels = ["А", "Б", "В", "Г"]; let fullCopyText = "";
@@ -556,25 +574,14 @@ function generateLoadouts() {
     fullCopyText += `=== ГРУППА ${groupLabel} ===\n`; const card = document.createElement("div"); card.className = "group-result-card"; let html = `<h3>Группа ${groupLabel}</h3>`;
     teamsInGroup.forEach(teamName => {
       html += `<div class="team-in-group"><div class="team-in-group-name">${teamName}</div>`; fullCopyText += `\n[ ${teamName} ]\n`;
-      const players = teamRosters[teamName] || ["Игрок 1", "Игрок 2", "Игрок 3"], marks = teamMarks[teamName] || [false, false, false];
+      const players = teamRosters[teamName] || ["Игрок 1", "Игрок 2", "Игрок 3"];
       
-      if (isScout) {
-        let markedIndex = marks.findIndex(m => m); 
-        for (let p = 0; p < 3; p++) { 
-          const pName = players[p] || `Игрок ${p+1}`;
-          const l = generateOneLoadout(isMelee); 
-          const isMarked = (p === markedIndex);
-          const displayName = isMarked ? `${pName} (НАБЛЮДАТЕЛЬ)` : pName;
-          html += `<div class="player-row" style="${isMarked ? 'color: var(--muted);' : ''}"><span class="label">${displayName}:</span> ${formatLoadout(l)}</div>`; 
-          fullCopyText += `- ${displayName}: ${formatLoadout(l)}\n`; 
-        }
-      } else {
-        for (let p = 0; p < 3; p++) { 
-          const pName = players[p] || `Игрок ${p+1}`;
-          const l = generateOneLoadout(isMelee); 
-          html += `<div class="player-row"><span class="label">${pName}:</span> ${formatLoadout(l)}</div>`; 
-          fullCopyText += `- ${pName}: ${formatLoadout(l)}\n`; 
-        }
+      // УБРАНА ЛОГИКА РАЗВЕДЧИКА. ВСЕГДА ГЕНЕРИРУЕМ 3 ЛОДАУТА.
+      for (let p = 0; p < 3; p++) { 
+        const pName = players[p] || `Игрок ${p+1}`;
+        const l = generateOneLoadout(isMelee); 
+        html += `<div class="player-row"><span class="label">${pName}:</span> ${formatLoadout(l)}</div>`; 
+        fullCopyText += `- ${pName}: ${formatLoadout(l)}\n`; 
       }
       html += `</div>`;
     });
